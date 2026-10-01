@@ -1,0 +1,47 @@
+@page "/books"
+@using LibraryInventory.Data
+@using LibraryInventory.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Books</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Library Books</MudText>
+
+@if (books is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!books.Any())
+{
+    <MudText>No books found.</MudText>
+}
+else
+{
+    <MudTable Items="books" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh>Author</MudTh>
+            <MudTh>Year</MudTh>
+            <MudTh>ISBN</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Author">@context.Author</MudTd>
+            <MudTd DataLabel="Year">@context.PublicationYear</MudTd>
+            <MudTd DataLabel="ISBN">@context.ISBN</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<Book>? books;
+
+    protected override async Task OnInitializedAsync()
+    {
+        books = await DbContext.Books
+            .Where(b => !b.IsDeleted)
+            .OrderBy(b => b.Title)
+            .ToListAsync();
+    }
+}
