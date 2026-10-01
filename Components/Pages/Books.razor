@@ -22,12 +22,14 @@ else
         <HeaderContent>
             <MudTh>Title</MudTh>
             <MudTh>Author</MudTh>
+            <MudTh>Category</MudTh>
             <MudTh>Year</MudTh>
             <MudTh>ISBN</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Title">@context.Title</MudTd>
             <MudTd DataLabel="Author">@context.Author</MudTd>
+            <MudTd DataLabel="Category">@context.Category?.Name</MudTd>
             <MudTd DataLabel="Year">@context.PublicationYear</MudTd>
             <MudTd DataLabel="ISBN">@context.ISBN</MudTd>
         </RowTemplate>
@@ -40,6 +42,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         books = await DbContext.Books
+            .Include(b => b.Category)
             .Where(b => !b.IsDeleted)
             .OrderBy(b => b.Title)
             .ToListAsync();
