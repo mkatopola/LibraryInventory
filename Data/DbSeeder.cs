@@ -100,5 +100,31 @@ public static class DbSeeder
                 await userManager.AddToRoleAsync(adminUser, "Admin");
             }
         }
+        // 5. Seed Book Copies
+        if (!await context.BookCopies.AnyAsync())
+        {
+            var books = await context.Books.ToListAsync();
+
+            var copies = new List<BookCopy>();
+
+            foreach (var book in books)
+            {
+                // Create 3 copies for each book
+                for (int i = 1; i <= 3; i++)
+                {
+                    copies.Add(new BookCopy
+                    {
+                        BookId = book.Id,
+                        Barcode = $"{book.ISBN}-{i:D3}",
+                        Location = $"Shelf {(char)('A' + (book.Id % 5))}-{10 + i}",
+                        Condition = "Good",
+                        Status = i == 3 ? "CheckedOut" : "Available"   // one copy checked out for demo
+                    });
+                }
+            }
+
+            context.BookCopies.AddRange(copies);
+            await context.SaveChangesAsync();
+        }
     }
 }

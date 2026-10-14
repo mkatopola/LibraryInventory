@@ -2,6 +2,7 @@ namespace LibraryInventory.Models;
 
 public class Book
 {
+    public List<BookCopy> Copies { get; set; } = new();
     public int Id { get; set; }
 
     public string Title { get; set; } = string.Empty;

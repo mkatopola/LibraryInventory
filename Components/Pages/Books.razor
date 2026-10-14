@@ -18,33 +18,63 @@ else if (!books.Any())
 }
 else
 {
-    <MudTable Items="books" Hover="true" Striped="true">
+    <MudTable Items="books" Hover="true" Striped="true" Dense="true">
         <HeaderContent>
             <MudTh>Title</MudTh>
             <MudTh>Author</MudTh>
             <MudTh>Category</MudTh>
             <MudTh>Year</MudTh>
-            <MudTh>ISBN</MudTh>
+            <MudTh>Available</MudTh>
+            <MudTh>Total Copies</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Title">@context.Title</MudTd>
             <MudTd DataLabel="Author">@context.Author</MudTd>
             <MudTd DataLabel="Category">@context.Category?.Name</MudTd>
             <MudTd DataLabel="Year">@context.PublicationYear</MudTd>
-            <MudTd DataLabel="ISBN">@context.ISBN</MudTd>
+            <MudTd DataLabel="Available">
+                <MudChip T="string" 
+                         Color="@(context.AvailableCount > 0 ? Color.Success : Color.Error)" 
+                         Size="Size.Small">
+                    @context.AvailableCount
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Total">@context.TotalCopies</MudTd>
         </RowTemplate>
     </MudTable>
 }
 
 @code {
-    private List<Book>? books;
+    private List<BookViewModel>? books;
 
     protected override async Task OnInitializedAsync()
     {
         books = await DbContext.Books
             .Include(b => b.Category)
+            .Include(b => b.Copies)
             .Where(b => !b.IsDeleted)
             .OrderBy(b => b.Title)
+            .Select(b => new BookViewModel
+            {
+                Id = b.Id,
+                Title = b.Title,
+                Author = b.Author,
+                Category = b.Category,
+                PublicationYear = b.PublicationYear,
+                AvailableCount = b.Copies.Count(c => c.Status == "Available"),
+                TotalCopies = b.Copies.Count
+            })
             .ToListAsync();
+    }
+
+    public class BookViewModel
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string Author { get; set; } = "";
+        public Category? Category { get; set; }
+        public int PublicationYear { get; set; }
+        public int AvailableCount { get; set; }
+        public int TotalCopies { get; set; }
     }
 }
