@@ -1,0 +1,158 @@
+@page "/admin/books/new"
+@page "/admin/books/edit/{Id:int}"
+@using LibraryInventory.Data
+@using LibraryInventory.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "Admin")]
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(Id is null ? "Add book" : "Edit book")</PageTitle>
+
+<MudButton Variant="Variant.Text" Href="/admin/books" Class="mb-4"
+           StartIcon="@Icons.Material.Filled.ArrowBack">
+    Back
+</MudButton>
+
+<MudText Typo="Typo.h4" Class="mb-4">@(Id is null ? "Add book" : "Edit book")</MudText>
+
+@if (!ready)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-6 mb-6" Elevation="2">
+        <MudTextField @bind-Value="title" Label="Title" Class="mb-3" Required="true" />
+        <MudTextField @bind-Value="author" Label="Author" Class="mb-3" Required="true" />
+        <MudTextField @bind-Value="isbn" Label="ISBN" Class="mb-3" />
+        <MudNumericField @bind-Value="year" Label="Publication year" Class="mb-3" />
+        <MudSelect T="int" @bind-Value="categoryId" Label="Category" Class="mb-3">
+            @foreach (var category in categories)
+            {
+                <MudSelectItem Value="@category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="description" Label="Description" Lines="3" Class="mb-4" />
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
+            Save
+        </MudButton>
+    </MudPaper>
+
+    @if (Id is not null)
+    {
+        <MudPaper Class="pa-6" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Add a copy</MudText>
+            <MudTextField @bind-Value="barcode" Label="Barcode" Class="mb-3" />
+            <MudTextField @bind-Value="location" Label="Location" Class="mb-4" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddCopyAsync">
+                Add copy
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private bool ready;
+    private string title = "";
+    private string author = "";
+    private string isbn = "";
+    private int year = DateTime.UtcNow.Year;
+    private int categoryId;
+    private string? description;
+    private List<Category> categories = new();
+
+    private string barcode = "";
+    private string location = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await DbContext.Categories.OrderBy(c => c.Name).ToListAsync();
+        categoryId = categories.FirstOrDefault()?.Id ?? 0;
+
+        if (Id is not null)
+        {
+            var book = await DbContext.Books.FirstOrDefaultAsync(b => b.Id == Id && !b.IsDeleted);
+            if (book is null)
+            {
+                Navigation.NavigateTo("/admin/books");
+                return;
+            }
+
+            title = book.Title;
+            author = book.Author;
+            isbn = book.ISBN;
+            year = book.PublicationYear;
+            categoryId = book.CategoryId;
+            description = book.Description;
+        }
+
+        ready = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(author) || categoryId == 0)
+        {
+            Snackbar.Add("Title, author, and category are required.", Severity.Warning);
+            return;
+        }
+
+        if (Id is null)
+        {
+            DbContext.Books.Add(new Book
+            {
+                Title = title.Trim(),
+                Author = author.Trim(),
+                ISBN = isbn.Trim(),
+                PublicationYear = year,
+                CategoryId = categoryId,
+                Description = description
+            });
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Book created.", Severity.Success);
+            Navigation.NavigateTo("/admin/books");
+            return;
+        }
+
+        var book = await DbContext.Books.FirstAsync(b => b.Id == Id);
+        book.Title = title.Trim();
+        book.Author = author.Trim();
+        book.ISBN = isbn.Trim();
+        book.PublicationYear = year;
+        book.CategoryId = categoryId;
+        book.Description = description;
+        book.UpdatedAt = DateTime.UtcNow;
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add("Book saved.", Severity.Success);
+    }
+
+    private async Task AddCopyAsync()
+    {
+        if (Id is null || string.IsNullOrWhiteSpace(barcode))
+        {
+            Snackbar.Add("Barcode is required.", Severity.Warning);
+            return;
+        }
+
+        DbContext.BookCopies.Add(new BookCopy
+        {
+            BookId = Id.Value,
+            Barcode = barcode.Trim(),
+            Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim(),
+            Condition = "Good",
+            Status = "Available"
+        });
+        await DbContext.SaveChangesAsync();
+
+        barcode = "";
+        location = "";
+        Snackbar.Add("Copy added.", Severity.Success);
+    }
+}

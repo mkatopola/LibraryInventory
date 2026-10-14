@@ -45,12 +45,17 @@
                     </form>
                 </div>
                 <AuthorizeView Roles="Admin" Context="admin">
-    <div class="nav-item px-3">
-        <NavLink class="nav-link" href="admin/reservations">
-            Admin: Reservations
-        </NavLink>
-    </div>
-</AuthorizeView>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="admin/reservations">
+                            Admin: Reservations
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="admin/books">
+                            Admin: Books
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
             </Authorized>
             <NotAuthorized>
                 <div class="nav-item px-3">

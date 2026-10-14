@@ -1,0 +1,73 @@
+@page "/admin/books"
+@using LibraryInventory.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "Admin")]
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Manage Books</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Manage Books</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/admin/books/new">
+        Add book
+    </MudButton>
+</MudStack>
+
+@if (books is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="books" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh>Author</MudTh>
+            <MudTh>Category</MudTh>
+            <MudTh>Copies</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Author">@context.Author</MudTd>
+            <MudTd DataLabel="Category">@context.CategoryName</MudTd>
+            <MudTd DataLabel="Copies">@context.CopyCount</MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           Href="@($"/admin/books/edit/{context.Id}")">
+                    Edit
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<Row>? books;
+
+    private sealed class Row
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string Author { get; set; } = "";
+        public string CategoryName { get; set; } = "";
+        public int CopyCount { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        books = await DbContext.Books
+            .Where(b => !b.IsDeleted)
+            .OrderBy(b => b.Title)
+            .Select(b => new Row
+            {
+                Id = b.Id,
+                Title = b.Title,
+                Author = b.Author,
+                CategoryName = b.Category!.Name,
+                CopyCount = b.Copies.Count
+            })
+            .ToListAsync();
+    }
+}
