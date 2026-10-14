@@ -1,0 +1,97 @@
+@page "/admin/reservations"
+@using LibraryInventory.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "Admin")]
+@inject ApplicationDbContext DbContext
+@inject ISnackbar Snackbar
+
+<PageTitle>All Reservations</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Active Reservations</MudText>
+
+@if (items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!items.Any())
+{
+    <MudText>No active reservations.</MudText>
+}
+else
+{
+    <MudTable Items="items" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>User</MudTh>
+            <MudTh>Title</MudTh>
+            <MudTh>Barcode</MudTh>
+            <MudTh>Due</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="User">@context.Email</MudTd>
+            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Barcode">@context.Barcode</MudTd>
+            <MudTd DataLabel="Due">@context.DueDate.ToLocalTime().ToString("d")</MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                           OnClick="@(() => MarkReturnedAsync(context.Id))">
+                    Mark returned
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<Row>? items;
+
+    private sealed class Row
+    {
+        public int Id { get; set; }
+        public string Email { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Barcode { get; set; } = "";
+        public DateTime DueDate { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        items = await DbContext.Reservations
+            .Where(r => r.Status == "Active")
+            .OrderBy(r => r.DueDate)
+            .Select(r => new Row
+            {
+                Id = r.Id,
+                Email = r.User!.Email ?? r.UserId,
+                Title = r.BookCopy!.Book!.Title,
+                Barcode = r.BookCopy.Barcode,
+                DueDate = r.DueDate
+            })
+            .ToListAsync();
+    }
+
+    private async Task MarkReturnedAsync(int id)
+    {
+        var reservation = await DbContext.Reservations
+            .Include(r => r.BookCopy)
+            .FirstOrDefaultAsync(r => r.Id == id && r.Status == "Active");
+
+        if (reservation?.BookCopy is null)
+        {
+            Snackbar.Add("Reservation not found.", Severity.Warning);
+            return;
+        }
+
+        reservation.Status = "Completed";
+        reservation.ReturnedAt = DateTime.UtcNow;
+        reservation.BookCopy.Status = "Available";
+        reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
+        await DbContext.SaveChangesAsync();
+
+        Snackbar.Add("Marked as returned.", Severity.Success);
+        await LoadAsync();
+    }
+}

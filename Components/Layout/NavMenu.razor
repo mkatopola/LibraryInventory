@@ -44,6 +44,13 @@
                         </button>
                     </form>
                 </div>
+                <AuthorizeView Roles="Admin" Context="admin">
+    <div class="nav-item px-3">
+        <NavLink class="nav-link" href="admin/reservations">
+            Admin: Reservations
+        </NavLink>
+    </div>
+</AuthorizeView>
             </Authorized>
             <NotAuthorized>
                 <div class="nav-item px-3">
