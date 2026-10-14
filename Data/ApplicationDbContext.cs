@@ -1,17 +1,16 @@
 using LibraryInventory.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryInventory.Data;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
     }
 
-    // DbSet properties for the entities
     public DbSet<Book> Books { get; set; }
-
     public DbSet<Category> Categories { get; set; }
 }

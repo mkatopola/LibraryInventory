@@ -22,4 +22,11 @@ A Blazor Server web application for university students to browse, reserve, and 
 ## How to Run
 
 ```bash
+## Stat App: 
 dotnet run
+
+## Start Database: 
+docker compose up -d
+
+## Check Database if running:
+docker compose ps

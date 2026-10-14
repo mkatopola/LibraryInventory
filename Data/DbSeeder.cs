@@ -1,13 +1,30 @@
 using LibraryInventory.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryInventory.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(ApplicationDbContext context)
+    public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
-        // Seed Categories first
+        using var scope = serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        // 1. Seed Roles
+        string[] roles = { "Admin", "Student" };
+
+        foreach (var role in roles)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                await roleManager.CreateAsync(new IdentityRole(role));
+            }
+        }
+
+        // 2. Seed Categories
         if (!await context.Categories.AnyAsync())
         {
             var categories = new List<Category>
@@ -21,7 +38,7 @@ public static class DbSeeder
             await context.SaveChangesAsync();
         }
 
-        // Seed Books only if none exist
+        // 3. Seed Books
         if (!await context.Books.AnyAsync())
         {
             var softwareEng = await context.Categories.FirstAsync(c => c.Name == "Software Engineering");
@@ -60,6 +77,28 @@ public static class DbSeeder
 
             context.Books.AddRange(books);
             await context.SaveChangesAsync();
+        }
+
+        // 4. Create a default Admin user (optional but useful)
+        var adminEmail = "admin@library.local";
+        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+
+        if (adminUser == null)
+        {
+            adminUser = new ApplicationUser
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                EmailConfirmed = true,
+                FullName = "System Administrator",
+                IsActive = true
+            };
+
+            var result = await userManager.CreateAsync(adminUser, "Admin123!");
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(adminUser, "Admin");
+            }
         }
     }
 }
