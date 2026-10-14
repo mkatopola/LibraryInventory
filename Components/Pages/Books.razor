@@ -28,14 +28,14 @@ else
             <MudTh>Total Copies</MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Title">
+                <MudLink Href="@($"/books/{context.Id}")">@context.Title</MudLink>
+            </MudTd>
             <MudTd DataLabel="Author">@context.Author</MudTd>
             <MudTd DataLabel="Category">@context.Category?.Name</MudTd>
             <MudTd DataLabel="Year">@context.PublicationYear</MudTd>
             <MudTd DataLabel="Available">
-                <MudChip T="string" 
-                         Color="@(context.AvailableCount > 0 ? Color.Success : Color.Error)" 
-                         Size="Size.Small">
+                <MudChip T="string" Color="@(context.AvailableCount > 0 ? Color.Success : Color.Error)" Size="Size.Small">
                     @context.AvailableCount
                 </MudChip>
             </MudTd>

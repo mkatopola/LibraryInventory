@@ -1,0 +1,101 @@
+@page "/books/{Id:int}"
+@using LibraryInventory.Data
+@using LibraryInventory.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>@(book?.Title ?? "Book Details")</PageTitle>
+
+@if (book is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-8" />
+}
+else
+{
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" 
+               Href="/books" Class="mb-4">
+        Back to Books
+    </MudButton>
+
+    <MudPaper Class="pa-6 mb-6" Elevation="2">
+        <MudText Typo="Typo.h4" Class="mb-2">@book.Title</MudText>
+        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-4">@book.Author</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudText><strong>ISBN:</strong> @book.ISBN</MudText>
+                <MudText><strong>Category:</strong> @book.Category?.Name</MudText>
+                <MudText><strong>Year:</strong> @book.PublicationYear</MudText>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudText><strong>Available copies:</strong> 
+                    <MudChip T="string" Size="Size.Small" 
+                             Color="@(availableCount > 0 ? Color.Success : Color.Error)">
+                        @availableCount / @book.Copies.Count
+                    </MudChip>
+                </MudText>
+            </MudItem>
+        </MudGrid>
+
+        @if (!string.IsNullOrWhiteSpace(book.Description))
+        {
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.body1">@book.Description</MudText>
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.h5" Class="mb-3">Copies</MudText>
+
+    <MudTable Items="book.Copies" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Barcode</MudTh>
+            <MudTh>Location</MudTh>
+            <MudTh>Condition</MudTh>
+            <MudTh>Status</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Barcode">@context.Barcode</MudTd>
+            <MudTd DataLabel="Location">@context.Location</MudTd>
+            <MudTd DataLabel="Condition">@context.Condition</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                    @context.Status
+                </MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Book? book;
+    private int availableCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        book = await DbContext.Books
+            .Include(b => b.Category)
+            .Include(b => b.Copies)
+            .FirstOrDefaultAsync(b => b.Id == Id && !b.IsDeleted);
+
+        if (book is null)
+        {
+            Navigation.NavigateTo("/books");
+            return;
+        }
+
+        availableCount = book.Copies.Count(c => c.Status == "Available");
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Available" => Color.Success,
+        "CheckedOut" => Color.Warning,
+        "Reserved" => Color.Info,
+        "Lost" or "Damaged" => Color.Error,
+        _ => Color.Default
+    };
+}
