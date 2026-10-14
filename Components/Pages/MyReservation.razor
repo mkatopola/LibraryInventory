@@ -1,0 +1,125 @@
+@page "/my-reservations"
+@using LibraryInventory.Data
+@using LibraryInventory.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ISnackbar Snackbar
+
+<PageTitle>My Reservations</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">My Reservations</MudText>
+
+@if (items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!items.Any())
+{
+    <MudText>You have no reservations yet.</MudText>
+}
+else
+{
+    <MudTable Items="items" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh>Barcode</MudTh>
+            <MudTh>Reserved</MudTh>
+            <MudTh>Due</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Title">
+                <MudLink Href="@($"/books/{context.BookId}")">@context.Title</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Barcode">@context.Barcode</MudTd>
+            <MudTd DataLabel="Reserved">@context.ReservedAt.ToLocalTime().ToString("d")</MudTd>
+            <MudTd DataLabel="Due">@context.DueDate.ToLocalTime().ToString("d")</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Status</MudChip>
+            </MudTd>
+            <MudTd>
+                @if (context.Status == "Active")
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                               OnClick="@(() => CancelAsync(context.Id))">
+                        Cancel
+                    </MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<Row>? items;
+
+    private sealed class Row
+    {
+        public int Id { get; set; }
+        public int BookId { get; set; }
+        public string Title { get; set; } = "";
+        public string Barcode { get; set; } = "";
+        public DateTime ReservedAt { get; set; }
+        public DateTime DueDate { get; set; }
+        public string Status { get; set; } = "";
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        if (user is null)
+        {
+            items = new();
+            return;
+        }
+
+        items = await DbContext.Reservations
+            .Where(r => r.UserId == user.Id)
+            .OrderByDescending(r => r.ReservedAt)
+            .Select(r => new Row
+            {
+                Id = r.Id,
+                BookId = r.BookCopy!.BookId,
+                Title = r.BookCopy.Book!.Title,
+                Barcode = r.BookCopy.Barcode,
+                ReservedAt = r.ReservedAt,
+                DueDate = r.DueDate,
+                Status = r.Status
+            })
+            .ToListAsync();
+    }
+
+    private async Task CancelAsync(int id)
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        if (user is null) return;
+
+        var reservation = await DbContext.Reservations
+            .Include(r => r.BookCopy)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == user.Id && r.Status == "Active");
+
+        if (reservation?.BookCopy is null)
+        {
+            Snackbar.Add("Reservation not found.", Severity.Warning);
+            return;
+        }
+
+        reservation.Status = "Cancelled";
+        reservation.BookCopy.Status = "Available";
+        reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
+        await DbContext.SaveChangesAsync();
+
+        Snackbar.Add("Reservation cancelled.", Severity.Success);
+        await LoadAsync();
+    }
+}

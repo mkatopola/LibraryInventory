@@ -205,6 +205,43 @@ namespace LibraryInventory.Migrations
                     b.ToTable("Categories");
                 });
 
+            modelBuilder.Entity("LibraryInventory.Models.Reservation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BookCopyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ReservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookCopyId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Reservations");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -359,6 +396,25 @@ namespace LibraryInventory.Migrations
                     b.Navigation("Book");
                 });
 
+            modelBuilder.Entity("LibraryInventory.Models.Reservation", b =>
+                {
+                    b.HasOne("LibraryInventory.Models.BookCopy", "BookCopy")
+                        .WithMany("Reservations")
+                        .HasForeignKey("BookCopyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LibraryInventory.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BookCopy");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -413,6 +469,11 @@ namespace LibraryInventory.Migrations
             modelBuilder.Entity("LibraryInventory.Models.Book", b =>
                 {
                     b.Navigation("Copies");
+                });
+
+            modelBuilder.Entity("LibraryInventory.Models.BookCopy", b =>
+                {
+                    b.Navigation("Reservations");
                 });
 
             modelBuilder.Entity("LibraryInventory.Models.Category", b =>

@@ -1,9 +1,13 @@
 @page "/books/{Id:int}"
 @using LibraryInventory.Data
 @using LibraryInventory.Models
+@using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ISnackbar Snackbar
 
 <PageTitle>@(book?.Title ?? "Book Details")</PageTitle>
 
@@ -13,7 +17,7 @@
 }
 else
 {
-    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" 
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
                Href="/books" Class="mb-4">
         Back to Books
     </MudButton>
@@ -29,12 +33,27 @@ else
                 <MudText><strong>Year:</strong> @book.PublicationYear</MudText>
             </MudItem>
             <MudItem xs="12" md="6">
-                <MudText><strong>Available copies:</strong> 
-                    <MudChip T="string" Size="Size.Small" 
+                <MudText Class="mb-3"><strong>Available copies:</strong>
+                    <MudChip T="string" Size="Size.Small"
                              Color="@(availableCount > 0 ? Color.Success : Color.Error)">
                         @availableCount / @book.Copies.Count
                     </MudChip>
                 </MudText>
+
+                @if (isAuthenticated && availableCount > 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="reserving" OnClick="ReserveAsync">
+                        @(reserving ? "Reserving..." : "Reserve for 14 days")
+                    </MudButton>
+                }
+                else if (!isAuthenticated)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               Href="Identity/Account/Login">
+                        Log in to reserve
+                    </MudButton>
+                }
             </MudItem>
         </MudGrid>
 
@@ -73,8 +92,17 @@ else
 
     private Book? book;
     private int availableCount;
+    private bool isAuthenticated;
+    private bool reserving;
 
     protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = auth.User.Identity?.IsAuthenticated == true;
+        await LoadBookAsync();
+    }
+
+    private async Task LoadBookAsync()
     {
         book = await DbContext.Books
             .Include(b => b.Category)
@@ -88,6 +116,51 @@ else
         }
 
         availableCount = book.Copies.Count(c => c.Status == "Available");
+    }
+
+    private async Task ReserveAsync()
+    {
+        reserving = true;
+        try
+        {
+            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+            if (user is null)
+            {
+                Snackbar.Add("Please log in first.", Severity.Warning);
+                return;
+            }
+
+            var copy = await DbContext.BookCopies
+                .FirstOrDefaultAsync(c => c.BookId == Id && c.Status == "Available");
+
+            if (copy is null)
+            {
+                Snackbar.Add("No copies are available.", Severity.Warning);
+                await LoadBookAsync();
+                return;
+            }
+
+            copy.Status = "Reserved";
+            copy.UpdatedAt = DateTime.UtcNow;
+
+            DbContext.Reservations.Add(new Reservation
+            {
+                UserId = user.Id,
+                BookCopyId = copy.Id,
+                ReservedAt = DateTime.UtcNow,
+                DueDate = DateTime.UtcNow.AddDays(14),
+                Status = "Active"
+            });
+
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add($"Reserved. Due {DateTime.UtcNow.AddDays(14):d}.", Severity.Success);
+            await LoadBookAsync();
+        }
+        finally
+        {
+            reserving = false;
+        }
     }
 
     private Color GetStatusColor(string status) => status switch
