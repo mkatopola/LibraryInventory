@@ -40,6 +40,14 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
             Save
         </MudButton>
+
+        @if (Id is not null)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Class="ml-2"
+                       OnClick="DeleteAsync">
+                Delete
+            </MudButton>
+        }
     </MudPaper>
 
     @if (Id is not null)
@@ -131,6 +139,20 @@ else
         book.UpdatedAt = DateTime.UtcNow;
         await DbContext.SaveChangesAsync();
         Snackbar.Add("Book saved.", Severity.Success);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (Id is null)
+            return;
+
+        var book = await DbContext.Books.FirstAsync(b => b.Id == Id);
+        book.IsDeleted = true;
+        book.UpdatedAt = DateTime.UtcNow;
+        await DbContext.SaveChangesAsync();
+
+        Snackbar.Add("Book removed from the catalog.", Severity.Success);
+        Navigation.NavigateTo("/admin/books");
     }
 
     private async Task AddCopyAsync()
