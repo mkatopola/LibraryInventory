@@ -8,13 +8,31 @@
 
 <MudText Typo="Typo.h4" Class="mb-4">Library Books</MudText>
 
+<MudGrid Class="mb-4">
+    <MudItem xs="12" md="6">
+        <MudTextField @bind-Value="search" Label="Search title, author, or ISBN"
+                      Immediate="true" DebounceInterval="300"
+                      OnDebounceIntervalElapsed="LoadAsync" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudSelect T="int" Value="categoryId" Label="Category"
+                   ValueChanged="OnCategoryChanged">
+            <MudSelectItem Value="0">All categories</MudSelectItem>
+            @foreach (var category in categories)
+            {
+                <MudSelectItem Value="@category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
 @if (books is null)
 {
     <MudProgressCircular Indeterminate="true" />
 }
 else if (!books.Any())
 {
-    <MudText>No books found.</MudText>
+    <MudText>No books match that search.</MudText>
 }
 else
 {
@@ -32,10 +50,12 @@ else
                 <MudLink Href="@($"/books/{context.Id}")">@context.Title</MudLink>
             </MudTd>
             <MudTd DataLabel="Author">@context.Author</MudTd>
-            <MudTd DataLabel="Category">@context.Category?.Name</MudTd>
+            <MudTd DataLabel="Category">@context.CategoryName</MudTd>
             <MudTd DataLabel="Year">@context.PublicationYear</MudTd>
             <MudTd DataLabel="Available">
-                <MudChip T="string" Color="@(context.AvailableCount > 0 ? Color.Success : Color.Error)" Size="Size.Small">
+                <MudChip T="string"
+                         Color="@(context.AvailableCount > 0 ? Color.Success : Color.Error)"
+                         Size="Size.Small">
                     @context.AvailableCount
                 </MudChip>
             </MudTd>
@@ -45,21 +65,49 @@ else
 }
 
 @code {
+    private string search = "";
+    private int categoryId;
+    private List<Category> categories = new();
     private List<BookViewModel>? books;
 
     protected override async Task OnInitializedAsync()
     {
-        books = await DbContext.Books
-            .Include(b => b.Category)
-            .Include(b => b.Copies)
-            .Where(b => !b.IsDeleted)
+        categories = await DbContext.Categories.OrderBy(c => c.Name).ToListAsync();
+        await LoadAsync();
+    }
+
+    private async Task OnCategoryChanged(int value)
+    {
+        categoryId = value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var query = DbContext.Books
+            .Where(b => !b.IsDeleted);
+
+        if (categoryId != 0)
+            query = query.Where(b => b.CategoryId == categoryId);
+
+        var term = search.Trim();
+        if (term.Length > 0)
+        {
+            var pattern = $"%{term}%";
+            query = query.Where(b =>
+                EF.Functions.ILike(b.Title, pattern) ||
+                EF.Functions.ILike(b.Author, pattern) ||
+                EF.Functions.ILike(b.ISBN, pattern));
+        }
+
+        books = await query
             .OrderBy(b => b.Title)
             .Select(b => new BookViewModel
             {
                 Id = b.Id,
                 Title = b.Title,
                 Author = b.Author,
-                Category = b.Category,
+                CategoryName = b.Category!.Name,
                 PublicationYear = b.PublicationYear,
                 AvailableCount = b.Copies.Count(c => c.Status == "Available"),
                 TotalCopies = b.Copies.Count
@@ -67,12 +115,12 @@ else
             .ToListAsync();
     }
 
-    public class BookViewModel
+    private sealed class BookViewModel
     {
         public int Id { get; set; }
         public string Title { get; set; } = "";
         public string Author { get; set; } = "";
-        public Category? Category { get; set; }
+        public string CategoryName { get; set; } = "";
         public int PublicationYear { get; set; }
         public int AvailableCount { get; set; }
         public int TotalCopies { get; set; }
