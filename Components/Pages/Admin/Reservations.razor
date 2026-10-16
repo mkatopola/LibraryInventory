@@ -1,5 +1,6 @@
 @page "/admin/reservations"
 @using LibraryInventory.Data
+@using LibraryInventory.Models
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "Admin")]
@@ -44,6 +45,7 @@ else
 }
 
 @code {
+    private const int MaxActive = 3;
     private List<Row>? items;
 
     private sealed class Row
@@ -87,11 +89,49 @@ else
 
         reservation.Status = "Completed";
         reservation.ReturnedAt = DateTime.UtcNow;
-        reservation.BookCopy.Status = "Available";
-        reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
-        await DbContext.SaveChangesAsync();
 
-        Snackbar.Add("Marked as returned.", Severity.Success);
+        var bookId = reservation.BookCopy.BookId;
+        var waiting = await DbContext.WaitlistEntries
+            .Where(w => w.BookId == bookId && w.Status == "Waiting")
+            .OrderBy(w => w.JoinedAt)
+            .ToListAsync();
+
+        WaitlistEntry? chosen = null;
+        foreach (var entry in waiting)
+        {
+            var activeCount = await DbContext.Reservations.CountAsync(r =>
+                r.UserId == entry.UserId && r.Status == "Active");
+            if (activeCount < MaxActive)
+            {
+                chosen = entry;
+                break;
+            }
+        }
+
+        if (chosen is null)
+        {
+            reservation.BookCopy.Status = "Available";
+            reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Marked as returned. Copy is available.", Severity.Success);
+        }
+        else
+        {
+            chosen.Status = "Fulfilled";
+            reservation.BookCopy.Status = "Reserved";
+            reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
+            DbContext.Reservations.Add(new Reservation
+            {
+                UserId = chosen.UserId,
+                BookCopyId = reservation.BookCopy.Id,
+                ReservedAt = DateTime.UtcNow,
+                DueDate = DateTime.UtcNow.AddDays(14),
+                Status = "Active"
+            });
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Returned and given to the next person on the waitlist.", Severity.Success);
+        }
+
         await LoadAsync();
     }
 }

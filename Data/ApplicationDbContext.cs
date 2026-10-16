@@ -15,4 +15,5 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Category> Categories { get; set; }
     public DbSet<BookCopy> BookCopies { get; set; }
     public DbSet<Reservation> Reservations { get; set; }
+    public DbSet<WaitlistEntry> WaitlistEntries { get; set; }
 }

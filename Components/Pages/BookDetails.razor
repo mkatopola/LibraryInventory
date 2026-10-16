@@ -46,6 +46,19 @@ else
                         You already have an active reservation for this book.
                     </MudAlert>
                 }
+                else if (isAuthenticated && alreadyWaiting)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        You are on the waitlist for this book.
+                    </MudAlert>
+                }
+                else if (isAuthenticated && availableCount == 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               Disabled="reserving" OnClick="JoinWaitlistAsync">
+                        Join waitlist
+                    </MudButton>
+                }
                 else if (isAuthenticated && atLimit)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true">
@@ -108,6 +121,7 @@ else
     private int availableCount;
     private bool isAuthenticated;
     private bool alreadyReserved;
+    private bool alreadyWaiting;
     private bool atLimit;
     private bool reserving;
 
@@ -133,6 +147,7 @@ else
 
         availableCount = book.Copies.Count(c => c.Status == "Available");
         alreadyReserved = false;
+        alreadyWaiting = false;
         atLimit = false;
 
         if (!isAuthenticated)
@@ -147,6 +162,11 @@ else
             r.UserId == user.Id &&
             r.Status == "Active" &&
             r.BookCopy!.BookId == Id);
+
+        alreadyWaiting = await DbContext.WaitlistEntries.AnyAsync(w =>
+            w.UserId == user.Id &&
+            w.BookId == Id &&
+            w.Status == "Waiting");
 
         var activeCount = await DbContext.Reservations.CountAsync(r =>
             r.UserId == user.Id && r.Status == "Active");
@@ -217,6 +237,37 @@ else
         {
             reserving = false;
         }
+    }
+
+    private async Task JoinWaitlistAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        if (user is null)
+        {
+            Snackbar.Add("Please log in first.", Severity.Warning);
+            return;
+        }
+
+        var already = await DbContext.WaitlistEntries.AnyAsync(w =>
+            w.UserId == user.Id && w.BookId == Id && w.Status == "Waiting");
+        if (already)
+        {
+            Snackbar.Add("You are already on the waitlist.", Severity.Info);
+            await LoadBookAsync();
+            return;
+        }
+
+        DbContext.WaitlistEntries.Add(new WaitlistEntry
+        {
+            UserId = user.Id,
+            BookId = Id,
+            JoinedAt = DateTime.UtcNow,
+            Status = "Waiting"
+        });
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add("You joined the waitlist.", Severity.Success);
+        await LoadBookAsync();
     }
 
     private Color GetStatusColor(string status) => status switch

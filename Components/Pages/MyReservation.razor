@@ -20,11 +20,11 @@
 }
 else if (!items.Any())
 {
-    <MudText>You have no reservations yet.</MudText>
+    <MudText Class="mb-6">You have no reservations yet.</MudText>
 }
 else
 {
-    <MudTable Items="items" Hover="true" Striped="true" Dense="true">
+    <MudTable Items="items" Hover="true" Striped="true" Dense="true" Class="mb-6">
         <HeaderContent>
             <MudTh>Title</MudTh>
             <MudTh>Barcode</MudTh>
@@ -56,8 +56,42 @@ else
     </MudTable>
 }
 
+<MudText Typo="Typo.h5" Class="mb-3">Waitlist</MudText>
+
+@if (waiting is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!waiting.Any())
+{
+    <MudText>You are not waiting for any books.</MudText>
+}
+else
+{
+    <MudTable Items="waiting" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh>Joined</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Title">
+                <MudLink Href="@($"/books/{context.BookId}")">@context.Title</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Joined">@context.JoinedAt.ToLocalTime().ToString("g")</MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                           OnClick="@(() => LeaveWaitlistAsync(context.Id))">
+                    Leave
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
 @code {
     private List<Row>? items;
+    private List<WaitRow>? waiting;
 
     private sealed class Row
     {
@@ -70,6 +104,14 @@ else
         public string Status { get; set; } = "";
     }
 
+    private sealed class WaitRow
+    {
+        public int Id { get; set; }
+        public int BookId { get; set; }
+        public string Title { get; set; } = "";
+        public DateTime JoinedAt { get; set; }
+    }
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
@@ -79,6 +121,7 @@ else
         if (user is null)
         {
             items = new();
+            waiting = new();
             return;
         }
 
@@ -94,6 +137,18 @@ else
                 ReservedAt = r.ReservedAt,
                 DueDate = r.DueDate,
                 Status = r.Status
+            })
+            .ToListAsync();
+
+        waiting = await DbContext.WaitlistEntries
+            .Where(w => w.UserId == user.Id && w.Status == "Waiting")
+            .OrderBy(w => w.JoinedAt)
+            .Select(w => new WaitRow
+            {
+                Id = w.Id,
+                BookId = w.BookId,
+                Title = w.Book!.Title,
+                JoinedAt = w.JoinedAt
             })
             .ToListAsync();
     }
@@ -120,6 +175,27 @@ else
         await DbContext.SaveChangesAsync();
 
         Snackbar.Add("Reservation cancelled.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task LeaveWaitlistAsync(int id)
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        if (user is null) return;
+
+        var entry = await DbContext.WaitlistEntries
+            .FirstOrDefaultAsync(w => w.Id == id && w.UserId == user.Id && w.Status == "Waiting");
+
+        if (entry is null)
+        {
+            Snackbar.Add("Waitlist entry not found.", Severity.Warning);
+            return;
+        }
+
+        entry.Status = "Cancelled";
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add("Left the waitlist.", Severity.Success);
         await LoadAsync();
     }
 }

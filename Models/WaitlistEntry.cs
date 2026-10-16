@@ -1,0 +1,17 @@
+namespace LibraryInventory.Models;
+
+public class WaitlistEntry
+{
+    public int Id { get; set; }
+
+    public string UserId { get; set; } = string.Empty;
+    public ApplicationUser? User { get; set; }
+
+    public int BookId { get; set; }
+    public Book? Book { get; set; }
+
+    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+
+    // Waiting, Fulfilled, Cancelled
+    public string Status { get; set; } = "Waiting";
+}
