@@ -46,6 +46,12 @@ else
                         You already have an active reservation for this book.
                     </MudAlert>
                 }
+                else if (isAuthenticated && atLimit)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        You already have @MaxActive active reservations. Cancel one before reserving another book.
+                    </MudAlert>
+                }
                 else if (isAuthenticated && availableCount > 0)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -93,6 +99,8 @@ else
 }
 
 @code {
+    private const int MaxActive = 3;
+
     [Parameter]
     public int Id { get; set; }
 
@@ -100,6 +108,7 @@ else
     private int availableCount;
     private bool isAuthenticated;
     private bool alreadyReserved;
+    private bool atLimit;
     private bool reserving;
 
     protected override async Task OnInitializedAsync()
@@ -124,6 +133,7 @@ else
 
         availableCount = book.Copies.Count(c => c.Status == "Available");
         alreadyReserved = false;
+        atLimit = false;
 
         if (!isAuthenticated)
             return;
@@ -137,6 +147,10 @@ else
             r.UserId == user.Id &&
             r.Status == "Active" &&
             r.BookCopy!.BookId == Id);
+
+        var activeCount = await DbContext.Reservations.CountAsync(r =>
+            r.UserId == user.Id && r.Status == "Active");
+        atLimit = activeCount >= MaxActive;
     }
 
     private async Task ReserveAsync()
@@ -160,6 +174,15 @@ else
             if (hasActive)
             {
                 Snackbar.Add("You already have this book reserved.", Severity.Warning);
+                await LoadBookAsync();
+                return;
+            }
+
+            var activeCount = await DbContext.Reservations.CountAsync(r =>
+                r.UserId == user.Id && r.Status == "Active");
+            if (activeCount >= MaxActive)
+            {
+                Snackbar.Add($"Limit is {MaxActive} active reservations.", Severity.Warning);
                 await LoadBookAsync();
                 return;
             }
