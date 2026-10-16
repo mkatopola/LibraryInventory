@@ -41,7 +41,9 @@ else
             <MudTd DataLabel="Reserved">@context.ReservedAt.ToLocalTime().ToString("d")</MudTd>
             <MudTd DataLabel="Due">@context.DueDate.ToLocalTime().ToString("d")</MudTd>
             <MudTd DataLabel="Status">
-                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Status</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor(context)">
+                    @StatusText(context)
+                </MudChip>
             </MudTd>
             <MudTd>
                 @if (context.Status == "Active")
@@ -110,6 +112,18 @@ else
         public int BookId { get; set; }
         public string Title { get; set; } = "";
         public DateTime JoinedAt { get; set; }
+    }
+
+    private static bool IsOverdue(Row row) =>
+        row.Status == "Active" && row.DueDate < DateTime.UtcNow;
+
+    private static string StatusText(Row row) =>
+        IsOverdue(row) ? "Overdue" : row.Status;
+
+    private static Color StatusColor(Row row)
+    {
+        if (IsOverdue(row)) return Color.Error;
+        return row.Status == "Active" ? Color.Info : Color.Default;
     }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();

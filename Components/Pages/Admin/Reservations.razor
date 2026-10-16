@@ -27,6 +27,7 @@ else
             <MudTh>Title</MudTh>
             <MudTh>Barcode</MudTh>
             <MudTh>Due</MudTh>
+            <MudTh>Status</MudTh>
             <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
@@ -34,6 +35,11 @@ else
             <MudTd DataLabel="Title">@context.Title</MudTd>
             <MudTd DataLabel="Barcode">@context.Barcode</MudTd>
             <MudTd DataLabel="Due">@context.DueDate.ToLocalTime().ToString("d")</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsOverdue ? Color.Error : Color.Info)">
+                    @(context.IsOverdue ? "Overdue" : "Active")
+                </MudChip>
+            </MudTd>
             <MudTd>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
                            OnClick="@(() => MarkReturnedAsync(context.Id))">
@@ -55,12 +61,14 @@ else
         public string Title { get; set; } = "";
         public string Barcode { get; set; } = "";
         public DateTime DueDate { get; set; }
+        public bool IsOverdue { get; set; }
     }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
+        var now = DateTime.UtcNow;
         items = await DbContext.Reservations
             .Where(r => r.Status == "Active")
             .OrderBy(r => r.DueDate)
@@ -70,7 +78,8 @@ else
                 Email = r.User!.Email ?? r.UserId,
                 Title = r.BookCopy!.Book!.Title,
                 Barcode = r.BookCopy.Barcode,
-                DueDate = r.DueDate
+                DueDate = r.DueDate,
+                IsOverdue = r.DueDate < now
             })
             .ToListAsync();
     }
