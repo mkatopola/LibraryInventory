@@ -1,17 +1,80 @@
 ﻿@page "/"
+@using LibraryInventory.Data
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
 
 <PageTitle>Library Inventory</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Welcome to the Library Inventory System</MudText>
-
-<MudText Typo="Typo.body1" Class="mb-4">
-    This application is meant for managing university library books.
+<MudText Typo="Typo.h3" Class="mb-2">University Library</MudText>
+<MudText Typo="Typo.body1" Class="mb-6 mud-text-secondary">
+    Browse the catalog, reserve a copy for 14 days, and check what you have out.
 </MudText>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mr-2">
-    Browse Books
-</MudButton>
+@if (stats is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline">Titles</MudText>
+                <MudText Typo="Typo.h4">@stats.Titles</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline">Copies available</MudText>
+                <MudText Typo="Typo.h4">@stats.AvailableCopies</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline">Active loans</MudText>
+                <MudText Typo="Typo.h4">@stats.ActiveLoans</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
 
-<MudButton Variant="Variant.Outlined" Color="Color.Secondary">
-    My Reservations
-</MudButton>
+<MudStack Row="true" Spacing="2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/books">
+        Browse books
+    </MudButton>
+
+    <AuthorizeView>
+        <Authorized>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/my-reservations">
+                My reservations
+            </MudButton>
+        </Authorized>
+        <NotAuthorized>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="Identity/Account/Login">
+                Log in
+            </MudButton>
+        </NotAuthorized>
+    </AuthorizeView>
+</MudStack>
+
+@code {
+    private Stats? stats;
+
+    private sealed class Stats
+    {
+        public int Titles { get; set; }
+        public int AvailableCopies { get; set; }
+        public int ActiveLoans { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = new Stats
+        {
+            Titles = await DbContext.Books.CountAsync(b => !b.IsDeleted),
+            AvailableCopies = await DbContext.BookCopies.CountAsync(c =>
+                c.Status == "Available" && !c.Book!.IsDeleted),
+            ActiveLoans = await DbContext.Reservations.CountAsync(r => r.Status == "Active")
+        };
+    }
+}

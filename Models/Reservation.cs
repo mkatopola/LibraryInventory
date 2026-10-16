@@ -17,4 +17,6 @@ public class Reservation
     public string Status { get; set; } = "Active";
 
     public DateTime? ReturnedAt { get; set; }
+
+    public decimal FineAmount { get; set; }
 }

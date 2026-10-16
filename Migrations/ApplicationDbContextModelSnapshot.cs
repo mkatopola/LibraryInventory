@@ -219,6 +219,9 @@ namespace LibraryInventory.Migrations
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("FineAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<DateTime>("ReservedAt")
                         .HasColumnType("timestamp with time zone");
 

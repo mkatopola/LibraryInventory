@@ -17,11 +17,11 @@
 }
 else if (!items.Any())
 {
-    <MudText>No active reservations.</MudText>
+    <MudText Class="mb-6">No active reservations.</MudText>
 }
 else
 {
-    <MudTable Items="items" Hover="true" Striped="true" Dense="true">
+    <MudTable Items="items" Hover="true" Striped="true" Dense="true" Class="mb-6">
         <HeaderContent>
             <MudTh>User</MudTh>
             <MudTh>Title</MudTh>
@@ -50,9 +50,40 @@ else
     </MudTable>
 }
 
+<MudText Typo="Typo.h5" Class="mb-3">Completed</MudText>
+
+@if (completed is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!completed.Any())
+{
+    <MudText>No completed loans yet.</MudText>
+}
+else
+{
+    <MudTable Items="completed" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>User</MudTh>
+            <MudTh>Title</MudTh>
+            <MudTh>Returned</MudTh>
+            <MudTh>Fine</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="User">@context.Email</MudTd>
+            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Returned">@context.ReturnedAt?.ToLocalTime().ToString("g")</MudTd>
+            <MudTd DataLabel="Fine">@context.FineAmount.ToString("0.00")</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
 @code {
     private const int MaxActive = 3;
+    private const decimal FinePerDay = 5m;
+
     private List<Row>? items;
+    private List<CompletedRow>? completed;
 
     private sealed class Row
     {
@@ -62,6 +93,14 @@ else
         public string Barcode { get; set; } = "";
         public DateTime DueDate { get; set; }
         public bool IsOverdue { get; set; }
+    }
+
+    private sealed class CompletedRow
+    {
+        public string Email { get; set; } = "";
+        public string Title { get; set; } = "";
+        public DateTime? ReturnedAt { get; set; }
+        public decimal FineAmount { get; set; }
     }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -82,6 +121,19 @@ else
                 IsOverdue = r.DueDate < now
             })
             .ToListAsync();
+
+        completed = await DbContext.Reservations
+            .Where(r => r.Status == "Completed")
+            .OrderByDescending(r => r.ReturnedAt)
+            .Take(20)
+            .Select(r => new CompletedRow
+            {
+                Email = r.User!.Email ?? r.UserId,
+                Title = r.BookCopy!.Book!.Title,
+                ReturnedAt = r.ReturnedAt,
+                FineAmount = r.FineAmount
+            })
+            .ToListAsync();
     }
 
     private async Task MarkReturnedAsync(int id)
@@ -96,8 +148,14 @@ else
             return;
         }
 
+        var now = DateTime.UtcNow;
+        var daysLate = (now.Date - reservation.DueDate.Date).Days;
+        if (daysLate < 0)
+            daysLate = 0;
+
         reservation.Status = "Completed";
-        reservation.ReturnedAt = DateTime.UtcNow;
+        reservation.ReturnedAt = now;
+        reservation.FineAmount = daysLate * FinePerDay;
 
         var bookId = reservation.BookCopy.BookId;
         var waiting = await DbContext.WaitlistEntries
@@ -120,27 +178,31 @@ else
         if (chosen is null)
         {
             reservation.BookCopy.Status = "Available";
-            reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
-            await DbContext.SaveChangesAsync();
-            Snackbar.Add("Marked as returned. Copy is available.", Severity.Success);
         }
         else
         {
             chosen.Status = "Fulfilled";
             reservation.BookCopy.Status = "Reserved";
-            reservation.BookCopy.UpdatedAt = DateTime.UtcNow;
             DbContext.Reservations.Add(new Reservation
             {
                 UserId = chosen.UserId,
                 BookCopyId = reservation.BookCopy.Id,
-                ReservedAt = DateTime.UtcNow,
-                DueDate = DateTime.UtcNow.AddDays(14),
+                ReservedAt = now,
+                DueDate = now.AddDays(14),
                 Status = "Active"
             });
-            await DbContext.SaveChangesAsync();
-            Snackbar.Add("Returned and given to the next person on the waitlist.", Severity.Success);
         }
 
+        reservation.BookCopy.UpdatedAt = now;
+        await DbContext.SaveChangesAsync();
+
+        var message = reservation.FineAmount == 0
+            ? "Marked as returned. No fine."
+            : $"Marked as returned. Fine: {reservation.FineAmount:0.00} ({daysLate} day(s) late).";
+        if (chosen is not null)
+            message += " Copy given to the next person on the waitlist.";
+
+        Snackbar.Add(message, reservation.FineAmount == 0 ? Severity.Success : Severity.Warning);
         await LoadAsync();
     }
 }
