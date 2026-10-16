@@ -40,7 +40,13 @@ else
                     </MudChip>
                 </MudText>
 
-                @if (isAuthenticated && availableCount > 0)
+                @if (isAuthenticated && alreadyReserved)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        You already have an active reservation for this book.
+                    </MudAlert>
+                }
+                else if (isAuthenticated && availableCount > 0)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                Disabled="reserving" OnClick="ReserveAsync">
@@ -93,6 +99,7 @@ else
     private Book? book;
     private int availableCount;
     private bool isAuthenticated;
+    private bool alreadyReserved;
     private bool reserving;
 
     protected override async Task OnInitializedAsync()
@@ -116,6 +123,20 @@ else
         }
 
         availableCount = book.Copies.Count(c => c.Status == "Available");
+        alreadyReserved = false;
+
+        if (!isAuthenticated)
+            return;
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        if (user is null)
+            return;
+
+        alreadyReserved = await DbContext.Reservations.AnyAsync(r =>
+            r.UserId == user.Id &&
+            r.Status == "Active" &&
+            r.BookCopy!.BookId == Id);
     }
 
     private async Task ReserveAsync()
@@ -128,6 +149,18 @@ else
             if (user is null)
             {
                 Snackbar.Add("Please log in first.", Severity.Warning);
+                return;
+            }
+
+            var hasActive = await DbContext.Reservations.AnyAsync(r =>
+                r.UserId == user.Id &&
+                r.Status == "Active" &&
+                r.BookCopy!.BookId == Id);
+
+            if (hasActive)
+            {
+                Snackbar.Add("You already have this book reserved.", Severity.Warning);
+                await LoadBookAsync();
                 return;
             }
 
