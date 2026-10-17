@@ -23,11 +23,11 @@ else
     <MudAlert Severity="@(totalFines > 0 ? Severity.Warning : Severity.Success)" Dense="true" Class="mb-4">
         @if (totalFines > 0)
         {
-            <span>Fines owed: @totalFines.ToString("0.00")</span>
+            <span>Fines owed: @totalFines.ToString("0.00"). Pay these before reserving another book.</span>
         }
         else
         {
-            <span>You have no fines.</span>
+            <span>You have no unpaid fines.</span>
         }
     </MudAlert>
 
@@ -59,7 +59,20 @@ else
                         @StatusText(context)
                     </MudChip>
                 </MudTd>
-                <MudTd DataLabel="Fine">@context.FineAmount.ToString("0.00")</MudTd>
+                <MudTd DataLabel="Fine">
+                    @if (context.FineAmount <= 0)
+                    {
+                        <span>0.00</span>
+                    }
+                    else if (context.IsPaid)
+                    {
+                        <span>@context.FineAmount.ToString("0.00") paid</span>
+                    }
+                    else
+                    {
+                        <span>@context.FineAmount.ToString("0.00") unpaid</span>
+                    }
+                </MudTd>
                 <MudTd>
                     @if (context.Status == "Active")
                     {
@@ -122,6 +135,7 @@ else
         public DateTime DueDate { get; set; }
         public string Status { get; set; } = "";
         public decimal FineAmount { get; set; }
+        public bool IsPaid { get; set; }
     }
 
     private sealed class WaitRow
@@ -172,11 +186,12 @@ else
                 ReservedAt = r.ReservedAt,
                 DueDate = r.DueDate,
                 Status = r.Status,
-                FineAmount = r.FineAmount
+                FineAmount = r.FineAmount,
+                IsPaid = r.IsPaid
             })
             .ToListAsync();
 
-        totalFines = items.Sum(r => r.FineAmount);
+        totalFines = items.Where(r => r.FineAmount > 0 && !r.IsPaid).Sum(r => r.FineAmount);
 
         waiting = await DbContext.WaitlistEntries
             .Where(w => w.UserId == user.Id && w.Status == "Waiting")

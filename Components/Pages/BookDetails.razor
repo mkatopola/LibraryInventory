@@ -40,7 +40,13 @@ else
                     </MudChip>
                 </MudText>
 
-                @if (isAuthenticated && alreadyReserved)
+                @if (isAuthenticated && owesFine)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        Pay your unpaid fines before reserving or joining a waitlist.
+                    </MudAlert>
+                }
+                else if (isAuthenticated && alreadyReserved)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         You already have an active reservation for this book.
@@ -123,6 +129,7 @@ else
     private bool alreadyReserved;
     private bool alreadyWaiting;
     private bool atLimit;
+    private bool owesFine;
     private bool reserving;
 
     protected override async Task OnInitializedAsync()
@@ -149,6 +156,7 @@ else
         alreadyReserved = false;
         alreadyWaiting = false;
         atLimit = false;
+        owesFine = false;
 
         if (!isAuthenticated)
             return;
@@ -157,6 +165,9 @@ else
         var user = await UserManager.GetUserAsync(auth.User);
         if (user is null)
             return;
+
+        owesFine = await DbContext.Reservations.AnyAsync(r =>
+            r.UserId == user.Id && r.FineAmount > 0 && !r.IsPaid);
 
         alreadyReserved = await DbContext.Reservations.AnyAsync(r =>
             r.UserId == user.Id &&
@@ -183,6 +194,15 @@ else
             if (user is null)
             {
                 Snackbar.Add("Please log in first.", Severity.Warning);
+                return;
+            }
+
+            var owes = await DbContext.Reservations.AnyAsync(r =>
+                r.UserId == user.Id && r.FineAmount > 0 && !r.IsPaid);
+            if (owes)
+            {
+                Snackbar.Add("Pay your unpaid fines first.", Severity.Warning);
+                await LoadBookAsync();
                 return;
             }
 
@@ -246,6 +266,15 @@ else
         if (user is null)
         {
             Snackbar.Add("Please log in first.", Severity.Warning);
+            return;
+        }
+
+        var owes = await DbContext.Reservations.AnyAsync(r =>
+            r.UserId == user.Id && r.FineAmount > 0 && !r.IsPaid);
+        if (owes)
+        {
+            Snackbar.Add("Pay your unpaid fines first.", Severity.Warning);
+            await LoadBookAsync();
             return;
         }
 

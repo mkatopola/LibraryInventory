@@ -19,4 +19,6 @@ public class Reservation
     public DateTime? ReturnedAt { get; set; }
 
     public decimal FineAmount { get; set; }
+
+    public bool IsPaid { get; set; }
 }

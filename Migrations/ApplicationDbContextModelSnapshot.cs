@@ -222,6 +222,9 @@ namespace LibraryInventory.Migrations
                     b.Property<decimal>("FineAmount")
                         .HasColumnType("numeric");
 
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("ReservedAt")
                         .HasColumnType("timestamp with time zone");
 

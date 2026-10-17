@@ -68,12 +68,37 @@ else
             <MudTh>Title</MudTh>
             <MudTh>Returned</MudTh>
             <MudTh>Fine</MudTh>
+            <MudTh>Payment</MudTh>
+            <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="User">@context.Email</MudTd>
             <MudTd DataLabel="Title">@context.Title</MudTd>
             <MudTd DataLabel="Returned">@context.ReturnedAt?.ToLocalTime().ToString("g")</MudTd>
             <MudTd DataLabel="Fine">@context.FineAmount.ToString("0.00")</MudTd>
+            <MudTd DataLabel="Payment">
+                @if (context.FineAmount <= 0)
+                {
+                    <MudText Typo="Typo.body2">None</MudText>
+                }
+                else if (context.IsPaid)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">Paid</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning">Unpaid</MudChip>
+                }
+            </MudTd>
+            <MudTd>
+                @if (context.FineAmount > 0 && !context.IsPaid)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                               OnClick="@(() => MarkPaidAsync(context.Id))">
+                        Mark paid
+                    </MudButton>
+                }
+            </MudTd>
         </RowTemplate>
     </MudTable>
 }
@@ -97,10 +122,12 @@ else
 
     private sealed class CompletedRow
     {
+        public int Id { get; set; }
         public string Email { get; set; } = "";
         public string Title { get; set; } = "";
         public DateTime? ReturnedAt { get; set; }
         public decimal FineAmount { get; set; }
+        public bool IsPaid { get; set; }
     }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -128,12 +155,31 @@ else
             .Take(20)
             .Select(r => new CompletedRow
             {
+                Id = r.Id,
                 Email = r.User!.Email ?? r.UserId,
                 Title = r.BookCopy!.Book!.Title,
                 ReturnedAt = r.ReturnedAt,
-                FineAmount = r.FineAmount
+                FineAmount = r.FineAmount,
+                IsPaid = r.IsPaid
             })
             .ToListAsync();
+    }
+
+    private async Task MarkPaidAsync(int id)
+    {
+        var reservation = await DbContext.Reservations
+            .FirstOrDefaultAsync(r => r.Id == id && r.Status == "Completed" && r.FineAmount > 0 && !r.IsPaid);
+
+        if (reservation is null)
+        {
+            Snackbar.Add("Fine not found.", Severity.Warning);
+            return;
+        }
+
+        reservation.IsPaid = true;
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add("Fine marked as paid.", Severity.Success);
+        await LoadAsync();
     }
 
     private async Task MarkReturnedAsync(int id)
@@ -156,6 +202,7 @@ else
         reservation.Status = "Completed";
         reservation.ReturnedAt = now;
         reservation.FineAmount = daysLate * FinePerDay;
+        reservation.IsPaid = reservation.FineAmount == 0;
 
         var bookId = reservation.BookCopy.BookId;
         var waiting = await DbContext.WaitlistEntries
@@ -168,7 +215,9 @@ else
         {
             var activeCount = await DbContext.Reservations.CountAsync(r =>
                 r.UserId == entry.UserId && r.Status == "Active");
-            if (activeCount < MaxActive)
+            var owes = await DbContext.Reservations.AnyAsync(r =>
+                r.UserId == entry.UserId && r.FineAmount > 0 && !r.IsPaid);
+            if (activeCount < MaxActive && !owes)
             {
                 chosen = entry;
                 break;
