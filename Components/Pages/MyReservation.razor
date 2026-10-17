@@ -18,44 +18,60 @@
 {
     <MudProgressCircular Indeterminate="true" />
 }
-else if (!items.Any())
-{
-    <MudText Class="mb-6">You have no reservations yet.</MudText>
-}
 else
 {
-    <MudTable Items="items" Hover="true" Striped="true" Dense="true" Class="mb-6">
-        <HeaderContent>
-            <MudTh>Title</MudTh>
-            <MudTh>Barcode</MudTh>
-            <MudTh>Reserved</MudTh>
-            <MudTh>Due</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh></MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Title">
-                <MudLink Href="@($"/books/{context.BookId}")">@context.Title</MudLink>
-            </MudTd>
-            <MudTd DataLabel="Barcode">@context.Barcode</MudTd>
-            <MudTd DataLabel="Reserved">@context.ReservedAt.ToLocalTime().ToString("d")</MudTd>
-            <MudTd DataLabel="Due">@context.DueDate.ToLocalTime().ToString("d")</MudTd>
-            <MudTd DataLabel="Status">
-                <MudChip T="string" Size="Size.Small" Color="@StatusColor(context)">
-                    @StatusText(context)
-                </MudChip>
-            </MudTd>
-            <MudTd>
-                @if (context.Status == "Active")
-                {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
-                               OnClick="@(() => CancelAsync(context.Id))">
-                        Cancel
-                    </MudButton>
-                }
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    <MudAlert Severity="@(totalFines > 0 ? Severity.Warning : Severity.Success)" Dense="true" Class="mb-4">
+        @if (totalFines > 0)
+        {
+            <span>Fines owed: @totalFines.ToString("0.00")</span>
+        }
+        else
+        {
+            <span>You have no fines.</span>
+        }
+    </MudAlert>
+
+    @if (!items.Any())
+    {
+        <MudText Class="mb-6">You have no reservations yet.</MudText>
+    }
+    else
+    {
+        <MudTable Items="items" Hover="true" Striped="true" Dense="true" Class="mb-6">
+            <HeaderContent>
+                <MudTh>Title</MudTh>
+                <MudTh>Barcode</MudTh>
+                <MudTh>Reserved</MudTh>
+                <MudTh>Due</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Fine</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Title">
+                    <MudLink Href="@($"/books/{context.BookId}")">@context.Title</MudLink>
+                </MudTd>
+                <MudTd DataLabel="Barcode">@context.Barcode</MudTd>
+                <MudTd DataLabel="Reserved">@context.ReservedAt.ToLocalTime().ToString("d")</MudTd>
+                <MudTd DataLabel="Due">@context.DueDate.ToLocalTime().ToString("d")</MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Color="@StatusColor(context)">
+                        @StatusText(context)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Fine">@context.FineAmount.ToString("0.00")</MudTd>
+                <MudTd>
+                    @if (context.Status == "Active")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                   OnClick="@(() => CancelAsync(context.Id))">
+                            Cancel
+                        </MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
 }
 
 <MudText Typo="Typo.h5" Class="mb-3">Waitlist</MudText>
@@ -94,6 +110,7 @@ else
 @code {
     private List<Row>? items;
     private List<WaitRow>? waiting;
+    private decimal totalFines;
 
     private sealed class Row
     {
@@ -104,6 +121,7 @@ else
         public DateTime ReservedAt { get; set; }
         public DateTime DueDate { get; set; }
         public string Status { get; set; } = "";
+        public decimal FineAmount { get; set; }
     }
 
     private sealed class WaitRow
@@ -123,7 +141,9 @@ else
     private static Color StatusColor(Row row)
     {
         if (IsOverdue(row)) return Color.Error;
-        return row.Status == "Active" ? Color.Info : Color.Default;
+        if (row.Status == "Active") return Color.Info;
+        if (row.Status == "Completed") return Color.Success;
+        return Color.Default;
     }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -136,6 +156,7 @@ else
         {
             items = new();
             waiting = new();
+            totalFines = 0;
             return;
         }
 
@@ -150,9 +171,12 @@ else
                 Barcode = r.BookCopy.Barcode,
                 ReservedAt = r.ReservedAt,
                 DueDate = r.DueDate,
-                Status = r.Status
+                Status = r.Status,
+                FineAmount = r.FineAmount
             })
             .ToListAsync();
+
+        totalFines = items.Sum(r => r.FineAmount);
 
         waiting = await DbContext.WaitlistEntries
             .Where(w => w.UserId == user.Id && w.Status == "Waiting")
